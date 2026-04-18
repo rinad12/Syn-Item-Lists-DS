@@ -1,0 +1,20 @@
+[project]
+name = "synthetic-packing-lists"
+version = "0.1.0"
+description = "Synthetic dataset of packing lists for various trip types"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+dependencies = [
+    "google-generativeai>=0.8.0",
+    "pydantic>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "tqdm>=4.67.0",
+    "pandas>=2.0.0",
+    "jinja2>=3.1.0",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "ruff>=0.8.0",
+]
