@@ -1,45 +1,108 @@
 # Synthetic Packing Lists Dataset
 
-A dataset of synthetic packing lists generated for various trip types, destinations, durations, and traveler profiles. Intended for fine-tuning or evaluating language models on list-generation tasks.
+A synthetic dataset of expert-quality packing lists for fine-tuning travel logistics assistants (e.g. Gemma 4). Generated with Google Gemini 1.5 Pro, grounded on 10 hand-curated seed examples.
 
-## Dataset
+This dataset was developed using the **Knowledge Distillation** method, where 10 expert scenarios — curated from open web data and professional logistics/survival sources — served as the gold standard seeds for generating an expanded synthetic sample.
 
-`data/dataset.jsonl` — one JSON object per line. Each record represents a single packing list generation task:
+## Dataset structure
+
+```
+data/
+  train.jsonl   # 80% of generated samples
+  test.jsonl    # 10%
+  val.jsonl     # 10%
+```
+
+Each line is a self-contained JSON record:
 
 ```json
 {
-  "prompt": "Create a packing list for a 7-day beach vacation in Thailand for a solo traveler.",
-  "completion": "..."
+  "intent": "Wildlife safari",
+  "duration": 10,
+  "infrastructure": "Basic — rural / remote village",
+  "climate": "Subtropical (hot humid summer)",
+  "risks": ["Vector-borne disease (mosquitoes / ticks)", "High UV exposure"],
+  "reasoning": "A 10-day safari in a basic-infrastructure subtropical environment...",
+  "packing_list": {
+    "Clothing": [
+      {
+        "item": "Long-Sleeved Lightweight Shirt",
+        "quantity": 5,
+        "formula": "N/2",
+        "reason": "Rotation with camp laundry every 2 days; long sleeves are the primary physical barrier against mosquito bites during dawn/dusk game drives."
+      }
+    ],
+    "Health & Hygiene": ["..."]
+  }
 }
 ```
 
+### Schema
+
+| Field          | Type                              | Description                                                  |
+|----------------|-----------------------------------|--------------------------------------------------------------|
+| `intent`       | string                            | Trip purpose (e.g. "Hiking / Trekking", "Business trip")    |
+| `duration`     | int                               | Trip length in days                                          |
+| `infrastructure` | string                          | Availability of utilities and services at destination        |
+| `climate`      | string                            | Climate type at destination                                  |
+| `risks`        | list[string]                      | 1–3 active risk factors                                      |
+| `reasoning`    | string                            | Model's explanation of how risks/climate shaped the list     |
+| `packing_list` | dict[str, list[PackingItem]]      | Items grouped by category                                    |
+
+**PackingItem fields:** `item` · `quantity` · `formula` · `reason`
+
+Quantity formulas follow the convention: `N` = one per day, `N+1` = daily + buffer, `N/2` = every-other-day rotation, `Constant` = fixed regardless of duration.
+
 ## Setup
 
-Requires [uv](https://github.com/astral-sh/uv).
+Requires [uv](https://github.com/astral-sh/uv) and a Google Gemini API key.
 
 ```bash
+# Install dependencies
 uv sync
+
+# Create .env file
+echo "GOOGLE_API_KEY=your_key_here" > .env
 ```
 
 ## Generate
 
 ```bash
+# Generate 1000 samples (default)
 uv run generate.py
+
+# Custom target
+uv run generate.py --target 500
+
+# Custom seeds file
+uv run generate.py --seeds seed_examples.md --target 1000
 ```
 
-By default generates 100 examples and writes them to `data/dataset.jsonl`. Use `--count` to change the number:
+The script appends to existing `.jsonl` files, so it is safe to stop and resume.
 
-```bash
-uv run generate.py --count 500
+## How it works
+
+1. **Dynamic sampling** — each scenario is randomly drawn: intent from 22 categories, infrastructure from 12 types, climate from 14 types, 1–3 risks from 18 options, duration with weighted tiers (60% short 1–7 days, 30% medium 8–21, 10% long 22–90).
+2. **Few-shot grounding** — one of 10 expert-curated seed examples is injected into every prompt as a Gold Standard reference.
+3. **Structured output** — Gemini's `response_schema` feature enforces the Pydantic schema on every response; malformed outputs are skipped automatically.
+4. **Exponential back-off** — up to 6 retries with jittered delay on API errors.
+5. **Stream writing** — each validated sample is appended immediately; no in-memory accumulation.
+
+
+## Project structure
+
 ```
-
-## Schema
-
-| Field        | Type   | Description                                      |
-|--------------|--------|--------------------------------------------------|
-| `prompt`     | string | User instruction describing the trip             |
-| `completion` | string | Packing list as a markdown-formatted string      |
-| `metadata`   | object | Trip type, destination, duration, traveler count |
+.
+├── generate.py          # Generation script (PEP 723 inline metadata)
+├── seed_examples.md     # 10 hand-curated expert packing list examples
+├── pyproject.toml
+├── uv.lock
+├── .env                 # GOOGLE_API_KEY (not committed)
+└── data/
+    ├── train.jsonl
+    ├── test.jsonl
+    └── val.jsonl
+```
 
 ## License
 

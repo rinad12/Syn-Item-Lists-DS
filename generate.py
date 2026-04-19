@@ -1,18 +1,34 @@
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "google-generativeai>=0.8.0",
+#   "pydantic>=2.0.0",
+#   "jinja2>=3.1.0",
+#   "python-dotenv>=1.0.0",
+#   "tqdm>=4.67.0",
+# ]
+# ///
 """Generate synthetic packing-list dataset using Google Gemini."""
 
-import argparse
 import json
-import math
+import os
 import random
+import re
+import time
 from pathlib import Path
+from typing import Dict, List
 
 import google.generativeai as genai
 from dotenv import load_dotenv
 from jinja2 import Template
+from pydantic import BaseModel, ValidationError
 from tqdm import tqdm
-import os
 
 load_dotenv()
+
+# ---------------------------------------------------------------------------
+# Domain lists
+# ---------------------------------------------------------------------------
 
 INTENTS = [
     "Beach vacation",
@@ -92,11 +108,33 @@ RISKS = [
     "Communication barriers / no signal",
 ]
 
-PROMPT_TEMPLATE = Template("""\
-Role: Expert Logistics Officer.
-Task: Create a highly precise, context-aware packing list.
+# ---------------------------------------------------------------------------
+# Pydantic models
+# ---------------------------------------------------------------------------
 
-Context:
+
+class PackingItem(BaseModel):
+    item: str
+    quantity: int
+    formula: str
+    reason: str
+
+
+class PackingListResponse(BaseModel):
+    reasoning: str
+    packing_list: Dict[str, List[PackingItem]]
+
+
+# ---------------------------------------------------------------------------
+# Prompt template
+# ---------------------------------------------------------------------------
+
+PROMPT_TEMPLATE = Template(
+    """\
+Role: Expert Travel Logistics Officer.
+Task: Generate a precise, context-aware packing list for the scenario below.
+
+=== SCENARIO ===
 - Intent: {{ intent }}
 - Duration: {{ duration }} days
 - Infrastructure Level: {{ infrastructure }}
@@ -104,13 +142,200 @@ Context:
 - Risk Factors:
 {% for risk in risks %}  * {{ risk }}
 {% endfor %}
-Requirements:
-1. **Adaptive Scaling:** Calculate quantities strictly based on the {{ duration }}-day duration. Use logical formulas (N or N+1) for daily essentials.
-2. **Risk Mitigation:** For every risk factor listed, include at least one specific item addressing it.
-3. **Compound Threats:** If multiple risks overlap, prioritize items that address both simultaneously.
-4. **Infrastructure Logic:** If infrastructure is off-grid or basic and duration > 7 days, include sustainability items (repair kits, laundry solutions, extra batteries).
-5. **Output Format:** Return a JSON object with two keys:
-   - "reasoning": 2–3 sentences explaining how risks, climate, and duration shaped the list
-   - "packing_list": object whose keys are category names and values are arrays of specific items with quantities
-""")
+=== GOLD STANDARD EXAMPLE (follow this quality and reasoning depth) ===
+{{ seed_example }}
 
+=== REQUIREMENTS ===
+1. ADAPTIVE SCALING — derive quantities from the {{ duration }}-day duration.
+   Use explicit formulas: "N" (one per day), "N+1" (daily + buffer),
+   "N/2" (every-other-day rotation), "Constant" (fixed regardless of duration).
+2. RISK MITIGATION — include at least one item that directly addresses each
+   listed risk factor. Call out the risk by name in the item's reason field.
+3. COMPOUND THREATS — if multiple risks overlap, prioritise items that
+   address both simultaneously and state so in the reason.
+4. INFRASTRUCTURE LOGIC — if infrastructure is off-grid or basic AND
+   duration > 7 days, add sustainability items (repair kit, laundry
+   solution, extra batteries, water purification).
+5. CATEGORIES — group items under logical category keys, e.g. "Clothing",
+   "Footwear", "Health & Hygiene", "Electronics", "Safety & Navigation",
+   "Documents & Finance".
+6. ITEM SCHEMA — every item must have:
+   - item: descriptive name (be specific, e.g. "Merino Wool Socks" not "Socks")
+   - quantity: integer
+   - formula: one of N, N+1, N-1, N/2, N/3, Constant, or a custom expression
+   - reason: 1-2 sentences explaining the WHY, referencing duration/risk/climate
+"""
+)
+
+# ---------------------------------------------------------------------------
+# Seed parser
+# ---------------------------------------------------------------------------
+
+
+def parse_seeds(seeds_path: Path) -> list[dict]:
+    """Extract JSON blocks from a markdown file of expert examples."""
+    text = seeds_path.read_text(encoding="utf-8")
+    blocks = re.findall(r"```json\s*(.*?)```", text, re.DOTALL)
+    seeds: list[dict] = []
+    for block in blocks:
+        try:
+            seeds.append(json.loads(block.strip()))
+        except json.JSONDecodeError as exc:
+            print(f"[warn] Could not parse seed block: {exc}")
+    return seeds
+
+
+# ---------------------------------------------------------------------------
+# Dynamic input sampling
+# ---------------------------------------------------------------------------
+
+
+def sample_duration() -> int:
+    """Weighted duration: 60% short (1-7), 30% medium (8-21), 10% long (22-90)."""
+    tier = random.choices(["short", "medium", "long"], weights=[60, 30, 10])[0]
+    if tier == "short":
+        return random.randint(1, 7)
+    if tier == "medium":
+        return random.randint(8, 21)
+    return random.randint(22, 90)
+
+
+def sample_scenario(seeds: list[dict]) -> dict:
+    """Return a dict of randomised scenario inputs plus one seed example."""
+    return {
+        "intent": random.choice(INTENTS),
+        "duration": sample_duration(),
+        "infrastructure": random.choice(INFRASTRUCTURES),
+        "climate": random.choice(CLIMATES),
+        "risks": random.sample(RISKS, k=random.randint(1, 3)),
+        "seed_example": json.dumps(random.choice(seeds), indent=2),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Exponential back-off
+# ---------------------------------------------------------------------------
+
+
+def call_with_backoff(fn, max_retries: int = 6, base_delay: float = 2.0):
+    """Call fn(), retrying with exponential back-off on any exception."""
+    for attempt in range(max_retries):
+        try:
+            return fn()
+        except Exception as exc:  # noqa: BLE001
+            if attempt == max_retries - 1:
+                raise
+            delay = base_delay * (2**attempt) + random.uniform(0, 1)
+            print(f"\n[retry {attempt + 1}/{max_retries}] {exc!r} — sleeping {delay:.1f}s")
+            time.sleep(delay)
+
+
+# ---------------------------------------------------------------------------
+# Main generation loop
+# ---------------------------------------------------------------------------
+
+
+def main(target: int = 1000, seeds_file: str = "seed_examples.md") -> None:
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        raise EnvironmentError("GOOGLE_API_KEY not found in environment / .env file.")
+
+    genai.configure(api_key=api_key)
+
+    # Gemini model with structured JSON output enforced via response_schema
+    model = genai.GenerativeModel(
+        model_name="gemini-1.5-pro",
+        generation_config=genai.GenerationConfig(
+            temperature=1.0,
+            response_mime_type="application/json",
+            response_schema=PackingListResponse,
+        ),
+    )
+
+    seeds = parse_seeds(Path(seeds_file))
+    if not seeds:
+        raise ValueError(f"No seed examples found in {seeds_file!r}.")
+    print(f"Loaded {len(seeds)} seed examples from {seeds_file!r}.")
+
+    # Prepare output files
+    data_dir = Path("data")
+    data_dir.mkdir(exist_ok=True)
+    split_paths = {
+        "train": data_dir / "train.jsonl",
+        "test": data_dir / "test.jsonl",
+        "val": data_dir / "val.jsonl",
+    }
+    split_files = {name: path.open("a", encoding="utf-8") for name, path in split_paths.items()}
+    split_weights = {"train": 80, "test": 10, "val": 10}
+
+    counts = {"train": 0, "test": 0, "val": 0, "errors": 0}
+
+    try:
+        with tqdm(total=target, desc="Generating samples", unit="sample") as pbar:
+            while sum(v for k, v in counts.items() if k != "errors") < target:
+                scenario = sample_scenario(seeds)
+                prompt = PROMPT_TEMPLATE.render(**scenario)
+
+                # Strip seed_example from the record we persist (it's large and redundant)
+                scenario_record = {k: v for k, v in scenario.items() if k != "seed_example"}
+
+                try:
+                    response = call_with_backoff(lambda: model.generate_content(prompt))
+                    parsed: PackingListResponse = PackingListResponse.model_validate_json(
+                        response.text
+                    )
+                except (ValidationError, Exception) as exc:
+                    counts["errors"] += 1
+                    tqdm.write(f"[error] Skipping sample: {exc!r}")
+                    continue
+
+                # Flatten everything into one JSONL record
+                record = {
+                    **scenario_record,
+                    **parsed.model_dump(),
+                }
+
+                # Choose split
+                split = random.choices(
+                    list(split_weights.keys()),
+                    weights=list(split_weights.values()),
+                )[0]
+                split_files[split].write(json.dumps(record, ensure_ascii=False) + "\n")
+                split_files[split].flush()
+
+                counts[split] += 1
+                pbar.update(1)
+                pbar.set_postfix(
+                    train=counts["train"],
+                    test=counts["test"],
+                    val=counts["val"],
+                    errors=counts["errors"],
+                )
+    finally:
+        for fh in split_files.values():
+            fh.close()
+
+    total = counts["train"] + counts["test"] + counts["val"]
+    print(
+        f"\nDone — {total} samples written "
+        f"(train={counts['train']}, test={counts['test']}, val={counts['val']}, "
+        f"errors={counts['errors']})"
+    )
+    for path in split_paths.values():
+        if path.exists():
+            lines = sum(1 for _ in path.open(encoding="utf-8"))
+            print(f"  {path}: {lines} lines")
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Generate synthetic packing-list dataset.")
+    parser.add_argument(
+        "--target", type=int, default=1000, help="Number of samples to generate (default: 1000)"
+    )
+    parser.add_argument(
+        "--seeds", type=str, default="seed_examples.md", help="Path to seeds markdown file"
+    )
+    args = parser.parse_args()
+    main(target=args.target, seeds_file=args.seeds)
