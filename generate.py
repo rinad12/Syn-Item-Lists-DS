@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#   "google-generativeai>=0.8.0",
+#   "google-genai>=1.0.0",
 #   "pydantic>=2.0.0",
 #   "jinja2>=3.1.0",
 #   "python-dotenv>=1.0.0",
@@ -16,9 +16,9 @@ import random
 import re
 import time
 from pathlib import Path
-from typing import Dict, List
+from typing import List
 
-import google.generativeai as genai
+from google import genai
 from dotenv import load_dotenv
 from jinja2 import Template
 from pydantic import BaseModel, ValidationError
@@ -120,9 +120,14 @@ class PackingItem(BaseModel):
     reason: str
 
 
+class PackingCategory(BaseModel):
+    category: str
+    items: List[PackingItem]
+
+
 class PackingListResponse(BaseModel):
     reasoning: str
-    packing_list: Dict[str, List[PackingItem]]
+    packing_list: List[PackingCategory]
 
 
 # ---------------------------------------------------------------------------
@@ -156,9 +161,9 @@ Task: Generate a precise, context-aware packing list for the scenario below.
 4. INFRASTRUCTURE LOGIC — if infrastructure is off-grid or basic AND
    duration > 7 days, add sustainability items (repair kit, laundry
    solution, extra batteries, water purification).
-5. CATEGORIES — group items under logical category keys, e.g. "Clothing",
+5. CATEGORIES — group items into logical categories, e.g. "Clothing",
    "Footwear", "Health & Hygiene", "Electronics", "Safety & Navigation",
-   "Documents & Finance".
+   "Documents & Finance". Each category has a "category" name and an "items" list.
 6. ITEM SCHEMA — every item must have:
    - item: descriptive name (be specific, e.g. "Merino Wool Socks" not "Socks")
    - quantity: integer
@@ -235,21 +240,16 @@ def call_with_backoff(fn, max_retries: int = 6, base_delay: float = 2.0):
 # ---------------------------------------------------------------------------
 
 
-def main(target: int = 1000, seeds_file: str = "seed_examples.md") -> None:
+def main(target: int = 1000, seeds_file: str = "seed_examples.md", model_name: str = "gemini-2.5-flash-lite") -> None:
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
         raise EnvironmentError("GOOGLE_API_KEY not found in environment / .env file.")
 
-    genai.configure(api_key=api_key)
-
-    # Gemini model with structured JSON output enforced via response_schema
-    model = genai.GenerativeModel(
-        model_name="gemini-1.5-pro",
-        generation_config=genai.GenerationConfig(
-            temperature=1.0,
-            response_mime_type="application/json",
-            response_schema=PackingListResponse,
-        ),
+    client = genai.Client(api_key=api_key)
+    gen_config = genai.types.GenerateContentConfig(
+        temperature=1.0,
+        response_mime_type="application/json",
+        response_schema=PackingListResponse,
     )
 
     seeds = parse_seeds(Path(seeds_file))
@@ -280,8 +280,12 @@ def main(target: int = 1000, seeds_file: str = "seed_examples.md") -> None:
                 scenario_record = {k: v for k, v in scenario.items() if k != "seed_example"}
 
                 try:
-                    response = call_with_backoff(lambda: model.generate_content(prompt))
-                    parsed: PackingListResponse = PackingListResponse.model_validate_json(
+                    response = call_with_backoff(
+                        lambda p=prompt: client.models.generate_content(
+                            model=model_name, contents=p, config=gen_config
+                        )
+                    )
+                    parsed: PackingListResponse = response.parsed or PackingListResponse.model_validate_json(
                         response.text
                     )
                 except (ValidationError, Exception) as exc:
@@ -337,5 +341,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--seeds", type=str, default="seed_examples.md", help="Path to seeds markdown file"
     )
+    parser.add_argument(
+        "--model", type=str, default="gemini-2.5-flash-lite", help="Gemini model name (default: gemini-2.5-flash-lite)"
+    )
     args = parser.parse_args()
-    main(target=args.target, seeds_file=args.seeds)
+    main(target=args.target, seeds_file=args.seeds, model_name=args.model)

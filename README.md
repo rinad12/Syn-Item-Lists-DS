@@ -1,6 +1,6 @@
 # Synthetic Packing Lists Dataset
 
-A synthetic dataset of expert-quality packing lists for fine-tuning travel logistics assistants (e.g. Gemma 4). Generated with Google Gemini 1.5 Pro, grounded on 10 hand-curated seed examples.
+A synthetic dataset of expert-quality packing lists for fine-tuning travel logistics assistants (e.g. Gemma 4). Generated with Google Gemini 2.0 Flash, grounded on 10 hand-curated seed examples.
 
 This dataset was developed using the **Knowledge Distillation** method, where 10 expert scenarios — curated from open web data and professional logistics/survival sources — served as the gold standard seeds for generating an expanded synthetic sample.
 
@@ -23,17 +23,23 @@ Each line is a self-contained JSON record:
   "climate": "Subtropical (hot humid summer)",
   "risks": ["Vector-borne disease (mosquitoes / ticks)", "High UV exposure"],
   "reasoning": "A 10-day safari in a basic-infrastructure subtropical environment...",
-  "packing_list": {
-    "Clothing": [
-      {
-        "item": "Long-Sleeved Lightweight Shirt",
-        "quantity": 5,
-        "formula": "N/2",
-        "reason": "Rotation with camp laundry every 2 days; long sleeves are the primary physical barrier against mosquito bites during dawn/dusk game drives."
-      }
-    ],
-    "Health & Hygiene": ["..."]
-  }
+  "packing_list": [
+    {
+      "category": "Clothing",
+      "items": [
+        {
+          "item": "Long-Sleeved Lightweight Shirt",
+          "quantity": 5,
+          "formula": "N/2",
+          "reason": "Rotation with camp laundry every 2 days; long sleeves are the primary physical barrier against mosquito bites during dawn/dusk game drives."
+        }
+      ]
+    },
+    {
+      "category": "Health & Hygiene",
+      "items": ["..."]
+    }
+  ]
 }
 ```
 
@@ -47,7 +53,9 @@ Each line is a self-contained JSON record:
 | `climate`      | string                            | Climate type at destination                                  |
 | `risks`        | list[string]                      | 1–3 active risk factors                                      |
 | `reasoning`    | string                            | Model's explanation of how risks/climate shaped the list     |
-| `packing_list` | dict[str, list[PackingItem]]      | Items grouped by category                                    |
+| `packing_list` | list[PackingCategory]             | Items grouped by category                                    |
+
+**PackingCategory fields:** `category` (str) · `items` (list[PackingItem])
 
 **PackingItem fields:** `item` · `quantity` · `formula` · `reason`
 
