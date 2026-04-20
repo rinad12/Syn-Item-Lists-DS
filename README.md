@@ -2,6 +2,8 @@
 
 A synthetic dataset of expert-quality packing lists for fine-tuning travel logistics assistants (e.g. Gemma 4). Generated with Google Gemini 2.0 Flash, grounded on 10 hand-curated seed examples.
 
+**Dataset on Hugging Face:** [rinad12/Syn-Item-Lists](https://huggingface.co/datasets/rinad12/Syn-Item-Lists)
+
 This dataset was developed using the **Knowledge Distillation** method, where 10 expert scenarios — curated from open web data and professional logistics/survival sources — served as the gold standard seeds for generating an expanded synthetic sample.
 
 ## Dataset structure
