@@ -116,18 +116,11 @@ RISKS = [
 class PackingItem(BaseModel):
     item: str
     quantity: int
-    formula: str
     reason: str
 
 
-class PackingCategory(BaseModel):
-    category: str
-    items: List[PackingItem]
-
-
 class PackingListResponse(BaseModel):
-    reasoning: str
-    packing_list: List[PackingCategory]
+    items: List[PackingItem]
 
 
 # ---------------------------------------------------------------------------
@@ -152,8 +145,6 @@ Task: Generate a precise, context-aware packing list for the scenario below.
 
 === REQUIREMENTS ===
 1. ADAPTIVE SCALING — derive quantities from the {{ duration }}-day duration.
-   Use explicit formulas: "N" (one per day), "N+1" (daily + buffer),
-   "N/2" (every-other-day rotation), "Constant" (fixed regardless of duration).
 2. RISK MITIGATION — include at least one item that directly addresses each
    listed risk factor. Call out the risk by name in the item's reason field.
 3. COMPOUND THREATS — if multiple risks overlap, prioritise items that
@@ -161,13 +152,9 @@ Task: Generate a precise, context-aware packing list for the scenario below.
 4. INFRASTRUCTURE LOGIC — if infrastructure is off-grid or basic AND
    duration > 7 days, add sustainability items (repair kit, laundry
    solution, extra batteries, water purification).
-5. CATEGORIES — group items into logical categories, e.g. "Clothing",
-   "Footwear", "Health & Hygiene", "Electronics", "Safety & Navigation",
-   "Documents & Finance". Each category has a "category" name and an "items" list.
-6. ITEM SCHEMA — every item must have:
+5. ITEM SCHEMA — every item must have:
    - item: descriptive name (be specific, e.g. "Merino Wool Socks" not "Socks")
    - quantity: integer
-   - formula: one of N, N+1, N-1, N/2, N/3, Constant, or a custom expression
    - reason: 1-2 sentences explaining the WHY, referencing duration/risk/climate
 """
 )
@@ -293,10 +280,9 @@ def main(target: int = 1000, seeds_file: str = "seed_examples.md", model_name: s
                     tqdm.write(f"[error] Skipping sample: {exc!r}")
                     continue
 
-                # Flatten everything into one JSONL record
                 record = {
-                    **scenario_record,
-                    **parsed.model_dump(),
+                    "input": scenario_record,
+                    "output": [item.model_dump() for item in parsed.items],
                 }
 
                 # Choose split
