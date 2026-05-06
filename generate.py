@@ -155,7 +155,7 @@ Task: Generate a precise, context-aware packing list for the scenario below.
 5. ITEM SCHEMA — every item must have:
    - item: descriptive name (be specific, e.g. "Merino Wool Socks" not "Socks")
    - quantity: integer
-   - reason: 1-2 sentences explaining the WHY, referencing duration/risk/climate
+   - reason: one short sentence (max 15 words) explaining the WHY
 """
 )
 
