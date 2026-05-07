@@ -227,7 +227,7 @@ def call_with_backoff(fn, max_retries: int = 6, base_delay: float = 2.0):
 # ---------------------------------------------------------------------------
 
 
-def main(target: int = 1000, seeds_file: str = "seed_examples.md", model_name: str = "gemini-2.5-flash-lite") -> None:
+def main(target: int = 1000, seeds_file: str = "seed_examples.md", model_name: str = "gemini-2.5-flash-lite", append: bool = False) -> None:
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
         raise EnvironmentError("GOOGLE_API_KEY not found in environment / .env file.")
@@ -252,7 +252,8 @@ def main(target: int = 1000, seeds_file: str = "seed_examples.md", model_name: s
         "test": data_dir / "test.jsonl",
         "val": data_dir / "val.jsonl",
     }
-    split_files = {name: path.open("a", encoding="utf-8") for name, path in split_paths.items()}
+    file_mode = "a" if append else "w"
+    split_files = {name: path.open(file_mode, encoding="utf-8") for name, path in split_paths.items()}
     split_weights = {"train": 80, "test": 10, "val": 10}
 
     counts = {"train": 0, "test": 0, "val": 0, "errors": 0}
@@ -330,5 +331,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model", type=str, default="gemini-2.5-flash-lite", help="Gemini model name (default: gemini-2.5-flash-lite)"
     )
+    parser.add_argument(
+        "--append", action="store_true", help="Append to existing data files instead of overwriting"
+    )
     args = parser.parse_args()
-    main(target=args.target, seeds_file=args.seeds, model_name=args.model)
+    main(target=args.target, seeds_file=args.seeds, model_name=args.model, append=args.append)
