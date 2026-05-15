@@ -522,10 +522,13 @@ Task: Generate a precise, context-aware packing list for the scenario below.
 4. INFRASTRUCTURE LOGIC — if infrastructure is off-grid or basic AND
    duration > 7 days, add sustainability items (repair kit, laundry
    solution, extra batteries, water purification).
-5. ITEM SCHEMA — every item must have:
+5. CONCISE OUTPUT — Do not exceed {{ max_items }} total items. Prioritise the
+   most critical gear for survival, professional needs, and risk mitigation.
+   Avoid filler items.
+6. ITEM SCHEMA — every item must have:
    - item: descriptive name (be specific, e.g. "Merino Wool Socks" not "Socks")
    - quantity: integer
-   - reason: one short sentence (max 15 words) explaining the WHY
+   - reason: one short sentence (max 10 words) explaining the WHY
 """
 )
 
@@ -565,6 +568,30 @@ def sample_duration(intent: str) -> int:
     return random.randint(22, 90)
 
 
+_INTENT_ITEM_MODIFIER: dict[str, int] = {
+    "Business trip": -3,
+    "Formal event / Destination wedding": -2,
+    "Camping / Backpacking": 3,
+    "Hiking / Trekking": 2,
+    "Humanitarian aid mission": 2,
+    "Scientific research expedition": 3,
+    "Photography expedition": 2,
+}
+
+
+def calculate_max_items(intent: str, duration: int, risks: list[str]) -> int:
+    """Return a max item count ceiling for the prompt."""
+    if duration <= 3:
+        base = random.randint(5, 8)
+    elif duration <= 10:
+        base = random.randint(10, 15)
+    else:
+        base = random.randint(15, 25)
+    modifier = _INTENT_ITEM_MODIFIER.get(intent, 0)
+    base = max(base + modifier, 5)
+    return max(base, len(risks) + 3)
+
+
 def sample_scenario(
     seeds: list[dict],
     intent: str,
@@ -602,13 +629,15 @@ def sample_scenario(
     k = random.randint(1, min(3, len(risk_pool)))
     risks = random.sample(risk_pool, k=k)
 
+    duration = sample_duration(intent)
     scenario = {
         "intent": intent,
-        "duration": sample_duration(intent),
+        "duration": duration,
         "infrastructure": infra,
         "climate": climate,
         "risks": risks,
         "seed_example": json.dumps(random.choice(seeds), indent=2),
+        "max_items": calculate_max_items(intent, duration, risks),
     }
     return scenario, combo
 
