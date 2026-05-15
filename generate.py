@@ -109,6 +109,376 @@ RISKS = [
 ]
 
 # ---------------------------------------------------------------------------
+# Hierarchical sampling logic
+# ---------------------------------------------------------------------------
+
+INTENT_TO_INFRA: dict[str, list[str]] = {
+    "Beach vacation": [
+        "Resort / Managed environment",
+        "Luxury / All-inclusive resort",
+        "Marine / Live-aboard boat",
+        "Mixed — standard town",
+    ],
+    "Camping / Backpacking": [
+        "None — off-grid / wilderness",
+        "Basic — rural / remote village",
+        "Temporary field camp",
+    ],
+    "Business trip": [
+        "Urban / Modern — full services",
+        "Industrial / Work site",
+        "Luxury / All-inclusive resort",
+        "Mixed — standard town",
+    ],
+    "City sightseeing": [
+        "Urban / Modern — full services",
+        "Mixed — standard town",
+        "Luxury / All-inclusive resort",
+    ],
+    "Hiking / Trekking": [
+        "None — off-grid / wilderness",
+        "Basic — rural / remote village",
+        "Temporary field camp",
+        "High-altitude research station",
+    ],
+    "Ski / Snowboard": [
+        "Resort / Managed environment",
+        "High-altitude research station",
+        "Temporary field camp",
+    ],
+    "Road trip": [
+        "Mixed — standard town",
+        "Urban / Modern — full services",
+        "Basic — rural / remote village",
+        "Developing — inconsistent utilities",
+    ],
+    "Volunteer mission": [
+        "Basic — rural / remote village",
+        "Developing — inconsistent utilities",
+        "Temporary field camp",
+        "None — off-grid / wilderness",
+    ],
+    "Extreme tourism": [
+        "None — off-grid / wilderness",
+        "Temporary field camp",
+        "High-altitude research station",
+        "Underground / Cave system",
+        "Marine / Live-aboard boat",
+    ],
+    "Scientific research expedition": [
+        "None — off-grid / wilderness",
+        "Temporary field camp",
+        "High-altitude research station",
+        "Basic — rural / remote village",
+    ],
+    "Digital nomad relocation": [
+        "Urban / Modern — full services",
+        "Mixed — standard town",
+        "Developing — inconsistent utilities",
+    ],
+    "Humanitarian aid mission": [
+        "Basic — rural / remote village",
+        "Developing — inconsistent utilities",
+        "Temporary field camp",
+        "None — off-grid / wilderness",
+    ],
+    "Photography expedition": [
+        "None — off-grid / wilderness",
+        "Temporary field camp",
+        "Basic — rural / remote village",
+        "Mixed — standard town",
+        "High-altitude research station",
+    ],
+    "Spiritual pilgrimage": [
+        "Basic — rural / remote village",
+        "Developing — inconsistent utilities",
+        "Mixed — standard town",
+        "Resort / Managed environment",
+    ],
+    "Competitive sports event": [
+        "Urban / Modern — full services",
+        "Resort / Managed environment",
+        "Mixed — standard town",
+        "Industrial / Work site",
+    ],
+    "Formal event / Destination wedding": [
+        "Luxury / All-inclusive resort",
+        "Resort / Managed environment",
+        "Urban / Modern — full services",
+    ],
+    "Medical tourism": [
+        "Urban / Modern — full services",
+        "Mixed — standard town",
+        "Luxury / All-inclusive resort",
+    ],
+    "Language immersion program": [
+        "Urban / Modern — full services",
+        "Mixed — standard town",
+        "Developing — inconsistent utilities",
+    ],
+    "Culinary tourism": [
+        "Urban / Modern — full services",
+        "Mixed — standard town",
+        "Luxury / All-inclusive resort",
+        "Resort / Managed environment",
+    ],
+    "Wildlife safari": [
+        "None — off-grid / wilderness",
+        "Basic — rural / remote village",
+        "Temporary field camp",
+        "Resort / Managed environment",
+    ],
+    "Festival attendance": [
+        "Mixed — standard town",
+        "Urban / Modern — full services",
+        "Developing — inconsistent utilities",
+        "Temporary field camp",
+    ],
+    "Academic / Study abroad": [
+        "Urban / Modern — full services",
+        "Mixed — standard town",
+        "Developing — inconsistent utilities",
+    ],
+}
+
+INFRA_TO_CLIMATE: dict[str, list[str]] = {
+    "None — off-grid / wilderness": [
+        "Arctic / Sub-zero cold",
+        "High altitude (thin air / intense UV)",
+        "Tropical rain (high humidity)",
+        "Arid desert (dry heat)",
+        "Subpolar / Tundra",
+        "Continental (extreme seasonal swings)",
+        "Equatorial rainforest (dense canopy)",
+        "Monsoonal (seasonal heavy rain)",
+    ],
+    "Basic — rural / remote village": [
+        "Tropical rain (high humidity)",
+        "Arid desert (dry heat)",
+        "Temperate (variable / four seasons)",
+        "Monsoonal (seasonal heavy rain)",
+        "Subtropical (hot humid summer)",
+        "Continental (extreme seasonal swings)",
+        "Equatorial rainforest (dense canopy)",
+        "Mediterranean (dry summer / wet winter)",
+    ],
+    "Developing — inconsistent utilities": [
+        "Tropical rain (high humidity)",
+        "Arid desert (dry heat)",
+        "Temperate (variable / four seasons)",
+        "Monsoonal (seasonal heavy rain)",
+        "Subtropical (hot humid summer)",
+        "Mediterranean (dry summer / wet winter)",
+        "Continental (extreme seasonal swings)",
+    ],
+    "Mixed — standard town": [
+        "Temperate (variable / four seasons)",
+        "Mediterranean (dry summer / wet winter)",
+        "Continental (extreme seasonal swings)",
+        "Subtropical (hot humid summer)",
+        "Maritime (high wind / salt spray)",
+        "Coastal fog / marine layer",
+        "Monsoonal (seasonal heavy rain)",
+    ],
+    "Urban / Modern — full services": [
+        "Temperate (variable / four seasons)",
+        "Mediterranean (dry summer / wet winter)",
+        "Subtropical (hot humid summer)",
+        "Continental (extreme seasonal swings)",
+        "Maritime (high wind / salt spray)",
+        "Coastal fog / marine layer",
+        "Arid desert (dry heat)",
+        "Tropical rain (high humidity)",
+    ],
+    "Industrial / Work site": [
+        "Arid desert (dry heat)",
+        "Arctic / Sub-zero cold",
+        "Tropical rain (high humidity)",
+        "Continental (extreme seasonal swings)",
+        "Temperate (variable / four seasons)",
+        "Maritime (high wind / salt spray)",
+    ],
+    "Resort / Managed environment": [
+        "Tropical rain (high humidity)",
+        "Mediterranean (dry summer / wet winter)",
+        "Subtropical (hot humid summer)",
+        "Coastal fog / marine layer",
+        "Temperate (variable / four seasons)",
+        "Arctic / Sub-zero cold",
+        "High altitude (thin air / intense UV)",
+    ],
+    "Marine / Live-aboard boat": [
+        "Tropical rain (high humidity)",
+        "Maritime (high wind / salt spray)",
+        "Mediterranean (dry summer / wet winter)",
+        "Coastal fog / marine layer",
+        "Subtropical (hot humid summer)",
+        "Equatorial rainforest (dense canopy)",
+    ],
+    "Underground / Cave system": [
+        "Temperate (variable / four seasons)",
+        "Tropical rain (high humidity)",
+        "High altitude (thin air / intense UV)",
+        "Continental (extreme seasonal swings)",
+        "Volcanic / geothermal zone",
+    ],
+    "High-altitude research station": [
+        "Arctic / Sub-zero cold",
+        "High altitude (thin air / intense UV)",
+        "Subpolar / Tundra",
+        "Continental (extreme seasonal swings)",
+    ],
+    "Temporary field camp": [
+        "Arctic / Sub-zero cold",
+        "Arid desert (dry heat)",
+        "Tropical rain (high humidity)",
+        "High altitude (thin air / intense UV)",
+        "Subpolar / Tundra",
+        "Monsoonal (seasonal heavy rain)",
+        "Continental (extreme seasonal swings)",
+        "Equatorial rainforest (dense canopy)",
+    ],
+    "Luxury / All-inclusive resort": [
+        "Tropical rain (high humidity)",
+        "Mediterranean (dry summer / wet winter)",
+        "Subtropical (hot humid summer)",
+        "Coastal fog / marine layer",
+        "Temperate (variable / four seasons)",
+    ],
+}
+
+CLIMATE_TO_RISKS: dict[str, list[str]] = {
+    "Tropical rain (high humidity)": [
+        "High humidity / mold",
+        "Vector-borne disease (mosquitoes / ticks)",
+        "Poor water quality",
+        "Flash floods",
+        "Food safety / contamination",
+        "High UV exposure",
+        "Communication barriers / no signal",
+    ],
+    "Arid desert (dry heat)": [
+        "Dust & sandstorms",
+        "High UV exposure",
+        "Poor water quality",
+        "Extreme wildlife encounters",
+        "Communication barriers / no signal",
+        "Food safety / contamination",
+    ],
+    "Arctic / Sub-zero cold": [
+        "Frostbite / hypothermia",
+        "Avalanche risk",
+        "Communication barriers / no signal",
+        "Power instability",
+        "Flash floods",
+    ],
+    "High altitude (thin air / intense UV)": [
+        "Altitude sickness",
+        "High UV exposure",
+        "Frostbite / hypothermia",
+        "Avalanche risk",
+        "Communication barriers / no signal",
+        "Power instability",
+    ],
+    "Temperate (variable / four seasons)": [
+        "Physical theft / pickpocketing",
+        "Flash floods",
+        "Food safety / contamination",
+        "Air pollution / smog",
+        "Vector-borne disease (mosquitoes / ticks)",
+        "Civil instability",
+    ],
+    "Mediterranean (dry summer / wet winter)": [
+        "High UV exposure",
+        "Physical theft / pickpocketing",
+        "Food safety / contamination",
+        "Seismic activity / earthquakes",
+        "Civil instability",
+        "Air pollution / smog",
+    ],
+    "Maritime (high wind / salt spray)": [
+        "Jellyfish / marine hazards",
+        "Flash floods",
+        "Communication barriers / no signal",
+        "High UV exposure",
+        "Power instability",
+    ],
+    "Monsoonal (seasonal heavy rain)": [
+        "Flash floods",
+        "High humidity / mold",
+        "Vector-borne disease (mosquitoes / ticks)",
+        "Poor water quality",
+        "Power instability",
+        "Food safety / contamination",
+        "Communication barriers / no signal",
+    ],
+    "Subpolar / Tundra": [
+        "Frostbite / hypothermia",
+        "Communication barriers / no signal",
+        "Power instability",
+        "Extreme wildlife encounters",
+        "Flash floods",
+    ],
+    "Subtropical (hot humid summer)": [
+        "High humidity / mold",
+        "Vector-borne disease (mosquitoes / ticks)",
+        "High UV exposure",
+        "Flash floods",
+        "Food safety / contamination",
+        "Air pollution / smog",
+        "Seismic activity / earthquakes",
+    ],
+    "Continental (extreme seasonal swings)": [
+        "Frostbite / hypothermia",
+        "Flash floods",
+        "Civil instability",
+        "Air pollution / smog",
+        "Power instability",
+        "Food safety / contamination",
+    ],
+    "Coastal fog / marine layer": [
+        "Jellyfish / marine hazards",
+        "High humidity / mold",
+        "Flash floods",
+        "Physical theft / pickpocketing",
+        "Communication barriers / no signal",
+    ],
+    "Volcanic / geothermal zone": [
+        "Seismic activity / earthquakes",
+        "Air pollution / smog",
+        "High UV exposure",
+        "Communication barriers / no signal",
+        "Extreme wildlife encounters",
+    ],
+    "Equatorial rainforest (dense canopy)": [
+        "High humidity / mold",
+        "Vector-borne disease (mosquitoes / ticks)",
+        "Poor water quality",
+        "Extreme wildlife encounters",
+        "Flash floods",
+        "Communication barriers / no signal",
+        "Food safety / contamination",
+    ],
+}
+
+# Per-intent duration ranges; intents absent here use the weighted fallback.
+INTENT_DURATION_RANGES: dict[str, tuple[int, int]] = {
+    "Digital nomad relocation":           (14, 90),
+    "Academic / Study abroad":            (14, 90),
+    "Language immersion program":         (14, 90),
+    "Business trip":                      (1,  5),
+    "Formal event / Destination wedding": (1,  5),
+    "Hiking / Trekking":                  (5,  21),
+    "Camping / Backpacking":              (5,  21),
+    "Volunteer mission":                  (5,  21),
+    "Humanitarian aid mission":           (5,  21),
+    "Ski / Snowboard":                    (3,  14),
+    "Scientific research expedition":     (7,  30),
+    "Photography expedition":             (7,  30),
+    "Wildlife safari":                    (7,  30),
+}
+
+# ---------------------------------------------------------------------------
 # Pydantic models
 # ---------------------------------------------------------------------------
 
@@ -178,12 +548,15 @@ def parse_seeds(seeds_path: Path) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Dynamic input sampling
+# Sampling functions
 # ---------------------------------------------------------------------------
 
 
-def sample_duration() -> int:
-    """Weighted duration: 60% short (1-7), 30% medium (8-21), 10% long (22-90)."""
+def sample_duration(intent: str) -> int:
+    """Return a duration in days appropriate for the given intent."""
+    if intent in INTENT_DURATION_RANGES:
+        lo, hi = INTENT_DURATION_RANGES[intent]
+        return random.randint(lo, hi)
     tier = random.choices(["short", "medium", "long"], weights=[60, 30, 10])[0]
     if tier == "short":
         return random.randint(1, 7)
@@ -192,15 +565,91 @@ def sample_duration() -> int:
     return random.randint(22, 90)
 
 
-def sample_scenario(seeds: list[dict]) -> dict:
-    """Return a dict of randomised scenario inputs plus one seed example."""
-    return {
-        "intent": random.choice(INTENTS),
-        "duration": sample_duration(),
-        "infrastructure": random.choice(INFRASTRUCTURES),
-        "climate": random.choice(CLIMATES),
-        "risks": random.sample(RISKS, k=random.randint(1, 3)),
+def sample_scenario(
+    seeds: list[dict],
+    intent: str,
+    used_combos: set[tuple[str, str, str]] | None = None,
+    require_unseen: bool = False,
+) -> tuple[dict, tuple[str, str, str]]:
+    """
+    Top-down hierarchical sampling: intent → infra → climate → risks.
+
+    If require_unseen=True, makes a best-effort attempt to return a
+    (intent, infra, climate) combo not present in used_combos.
+    Falls back gracefully if all combos are exhausted.
+    """
+    used_combos = used_combos or set()
+    infra_candidates = INTENT_TO_INFRA.get(intent) or INFRASTRUCTURES
+
+    max_attempts = max(len(infra_candidates) * 3, 10)
+    infra = random.choice(infra_candidates)
+    climate_candidates = INFRA_TO_CLIMATE.get(infra) or CLIMATES
+    climate = random.choice(climate_candidates)
+    combo = (intent, infra, climate)
+
+    if require_unseen and combo in used_combos:
+        for _ in range(max_attempts - 1):
+            infra = random.choice(infra_candidates)
+            climate_candidates = INFRA_TO_CLIMATE.get(infra) or CLIMATES
+            climate = random.choice(climate_candidates)
+            combo = (intent, infra, climate)
+            if combo not in used_combos:
+                break
+        else:
+            tqdm.write(f"[warn] intent '{intent}': no unseen combo found after {max_attempts} attempts — using seen combo")
+
+    risk_pool = CLIMATE_TO_RISKS.get(climate) or RISKS
+    k = random.randint(1, min(3, len(risk_pool)))
+    risks = random.sample(risk_pool, k=k)
+
+    scenario = {
+        "intent": intent,
+        "duration": sample_duration(intent),
+        "infrastructure": infra,
+        "climate": climate,
+        "risks": risks,
         "seed_example": json.dumps(random.choice(seeds), indent=2),
+    }
+    return scenario, combo
+
+
+def compute_intent_counts(target_train: int) -> dict[str, int]:
+    """Distribute target_train samples equally across all intents."""
+    n = len(INTENTS)
+    base = target_train // n
+    remainder = target_train % n
+    counts = {intent: base for intent in INTENTS}
+    for intent in INTENTS[:remainder]:
+        counts[intent] += 1
+    return counts
+
+
+# ---------------------------------------------------------------------------
+# LLM call helper
+# ---------------------------------------------------------------------------
+
+
+def _generate_record(
+    client: genai.Client,
+    gen_config: genai.types.GenerateContentConfig,
+    model_name: str,
+    scenario: dict,
+) -> dict:
+    """Render prompt, call LLM with backoff, parse and return the JSONL record dict."""
+    prompt = PROMPT_TEMPLATE.render(**scenario)
+    scenario_record = {k: v for k, v in scenario.items() if k != "seed_example"}
+
+    response = call_with_backoff(
+        lambda p=prompt: client.models.generate_content(
+            model=model_name, contents=p, config=gen_config
+        )
+    )
+    parsed: PackingListResponse = response.parsed or PackingListResponse.model_validate_json(
+        response.text
+    )
+    return {
+        "input": scenario_record,
+        "output": [item.model_dump() for item in parsed.items],
     }
 
 
@@ -244,7 +693,6 @@ def main(target: int = 1000, seeds_file: str = "seed_examples.md", model_name: s
         raise ValueError(f"No seed examples found in {seeds_file!r}.")
     print(f"Loaded {len(seeds)} seed examples from {seeds_file!r}.")
 
-    # Prepare output files
     data_dir = Path("data")
     data_dir.mkdir(exist_ok=True)
     split_paths = {
@@ -254,47 +702,49 @@ def main(target: int = 1000, seeds_file: str = "seed_examples.md", model_name: s
     }
     file_mode = "a" if append else "w"
     split_files = {name: path.open(file_mode, encoding="utf-8") for name, path in split_paths.items()}
-    split_weights = {"train": 80, "test": 10, "val": 10}
 
     counts = {"train": 0, "test": 0, "val": 0, "errors": 0}
 
+    target_train = int(target * 0.80)
+    target_val   = int(target * 0.10)
+    target_test  = target - target_train - target_val
+
+    # Build a shuffled intent queue with equal per-intent representation.
+    intent_counts = compute_intent_counts(target_train)
+    intent_queue: list[str] = []
+    for intent, n in intent_counts.items():
+        intent_queue.extend([intent] * n)
+    random.shuffle(intent_queue)
+
+    # train_combinations starts empty each run; cross-run isolation is not
+    # guaranteed when --append is used across multiple generation sessions.
+    train_combinations: set[tuple[str, str, str]] = set()
+
     try:
         with tqdm(total=target, desc="Generating samples", unit="sample") as pbar:
-            while sum(v for k, v in counts.items() if k != "errors") < target:
-                scenario = sample_scenario(seeds)
-                prompt = PROMPT_TEMPLATE.render(**scenario)
 
-                # Strip seed_example from the record we persist (it's large and redundant)
-                scenario_record = {k: v for k, v in scenario.items() if k != "seed_example"}
+            # ── Phase 1: TRAIN ────────────────────────────────────────────
+            queue_idx = 0
+            while counts["train"] < target_train:
+                if queue_idx < len(intent_queue):
+                    intent = intent_queue[queue_idx]
+                    queue_idx += 1
+                else:
+                    intent = random.choice(INTENTS)
+
+                scenario, combo = sample_scenario(seeds, intent)
 
                 try:
-                    response = call_with_backoff(
-                        lambda p=prompt: client.models.generate_content(
-                            model=model_name, contents=p, config=gen_config
-                        )
-                    )
-                    parsed: PackingListResponse = response.parsed or PackingListResponse.model_validate_json(
-                        response.text
-                    )
+                    record = _generate_record(client, gen_config, model_name, scenario)
                 except (ValidationError, Exception) as exc:
                     counts["errors"] += 1
                     tqdm.write(f"[error] Skipping sample: {exc!r}")
                     continue
 
-                record = {
-                    "input": scenario_record,
-                    "output": [item.model_dump() for item in parsed.items],
-                }
-
-                # Choose split
-                split = random.choices(
-                    list(split_weights.keys()),
-                    weights=list(split_weights.values()),
-                )[0]
-                split_files[split].write(json.dumps(record, ensure_ascii=False) + "\n")
-                split_files[split].flush()
-
-                counts[split] += 1
+                split_files["train"].write(json.dumps(record, ensure_ascii=False) + "\n")
+                split_files["train"].flush()
+                train_combinations.add(combo)
+                counts["train"] += 1
                 pbar.update(1)
                 pbar.set_postfix(
                     train=counts["train"],
@@ -302,6 +752,52 @@ def main(target: int = 1000, seeds_file: str = "seed_examples.md", model_name: s
                     val=counts["val"],
                     errors=counts["errors"],
                 )
+
+            # ── Phase 2: VAL + TEST ───────────────────────────────────────
+            for split_name, split_target in [("val", target_val), ("test", target_test)]:
+                generated_in_split = 0
+                seen_target   = round(split_target * 0.5)
+                unseen_target = split_target - seen_target
+                seen_count    = 0
+                unseen_count  = 0
+
+                while generated_in_split < split_target:
+                    need_unseen = unseen_count < unseen_target
+                    intent = random.choice(INTENTS)
+
+                    scenario, combo = sample_scenario(
+                        seeds,
+                        intent,
+                        used_combos=train_combinations,
+                        require_unseen=need_unseen,
+                    )
+                    is_unseen = combo not in train_combinations
+
+                    try:
+                        record = _generate_record(client, gen_config, model_name, scenario)
+                    except (ValidationError, Exception) as exc:
+                        counts["errors"] += 1
+                        tqdm.write(f"[error] Skipping sample: {exc!r}")
+                        continue
+
+                    split_files[split_name].write(json.dumps(record, ensure_ascii=False) + "\n")
+                    split_files[split_name].flush()
+
+                    if is_unseen:
+                        unseen_count += 1
+                    else:
+                        seen_count += 1
+
+                    counts[split_name] += 1
+                    generated_in_split += 1
+                    pbar.update(1)
+                    pbar.set_postfix(
+                        train=counts["train"],
+                        test=counts["test"],
+                        val=counts["val"],
+                        errors=counts["errors"],
+                    )
+
     finally:
         for fh in split_files.values():
             fh.close()
